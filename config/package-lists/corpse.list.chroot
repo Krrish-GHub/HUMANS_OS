@@ -1,0 +1,12 @@
+# Minimal graphical Debian Live foundation; package names are resolved from Debian stable.
+task-xfce-desktop
+live-config-systemd
+sudo
+network-manager
+curl
+ca-certificates
+git
+python3
+python3-venv
+python3-pip
+qemu-guest-agent

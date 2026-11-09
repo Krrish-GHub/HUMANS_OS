@@ -1,0 +1,10 @@
+/build/
+/config/*
+!/config/package-lists/
+!/config/includes.chroot/
+!/config/includes.chroot/usr/
+!/config/includes.chroot/usr/share/
+!/config/includes.chroot/usr/share/applications/
+!/config/includes.chroot/usr/share/applications/corpse-os-welcome.desktop
+*.iso
+*.log
