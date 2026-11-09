@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Corpse OS Setup
+Comment=Choose a local model and desktop appearance
+Exec=/usr/bin/python3 /usr/lib/corpse-os/corpse-setup.py --settings
+Icon=preferences-desktop-theme
+Terminal=false
+Categories=Settings;System;
+StartupNotify=true
