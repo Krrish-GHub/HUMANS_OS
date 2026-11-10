@@ -14,9 +14,16 @@ for text in (
     'shutil.disk_usage(Path.home())', 'system_memory_gb()',
     '"Material-inspired"', '"macOS-inspired"',
     '"Choose existing GGUF"', 'Google OAuth client',
-    'CORPSE OS PRESET BEGIN',
+    'CORPSE OS PRESET BEGIN',  # removed when migrating the old user CSS block
+    'HUMANS OS PRESET BEGIN',  # prior branded CSS marker is migrated too
+    'HUMANS OS PALETTE BEGIN',
+    'Welcome to H.U.M.A.N.S',
+    'APP_NAME = \"H.U.M.A.N.S Setup\"',
+    'Booting this session from USB or ISO does not install it onto your internal drive.',
 ):
     assert text in source, f"Missing required setup behavior: {text}"
+assert source.index('self.pages.add_named(self.info_page, "information")') < source.index('model_frame = Gtk.Frame(label="  Local AI model  ")')
+assert 'self.pages.set_visible_child_name("setup" if settings_only else "information")' in source
 assert "shell=True" not in source
 assert "sudo " not in source
 assert "password" in source and "never asks for your Google password" in source
@@ -30,5 +37,5 @@ autostart = ROOT / "config/includes.chroot/etc/xdg/autostart/corpse-os-first-run
 assert app.is_file() and autostart.is_file()
 assert "corpse-setup.py --settings" in app.read_text()
 assert "corpse-setup.py" in autostart.read_text()
-assert "Corpse OS First Run" in autostart.read_text()
+assert "H.U.M.A.N.S First Run" in autostart.read_text()
 print("First-run setup static checks passed. GUI, Ollama runtime/model downloads, and ISO boot are not tested by this script.")

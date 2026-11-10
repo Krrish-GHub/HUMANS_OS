@@ -1,0 +1,6 @@
+# Xfce screensaver supplies the entered token through PAM. Ask pam_unix first
+# so PAM_AUTHTOK exists for the device-local PIN verifier to inspect.
+auth [success=2 default=ignore] pam_unix.so try_first_pass
+auth sufficient pam_exec.so expose_authtok quiet /usr/lib/corpse-os/corpse-pin-auth
+auth requisite pam_deny.so
+auth required pam_permit.so

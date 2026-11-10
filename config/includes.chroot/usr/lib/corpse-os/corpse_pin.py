@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Root-only PIN verifier helpers for the optional Corpse OS PAM profile.
+"""Root-only PIN verifier helpers for the optional H.U.M.A.N.S PAM profile.
 
 This is a device-local convenience credential, not disk encryption or TPM-backed
 Windows Hello. The verifier directory and lockout state must remain root-owned.

@@ -1,4 +1,4 @@
-# Corpse OS local PIN login
+# H.U.M.A.N.S local PIN login
 
 ## What is implemented
 
@@ -19,7 +19,7 @@ This is local PAM session authentication, not TPM-backed Windows Hello, biometri
 
 The isolated PAM integration test exercises the packaged verifier with the real `pam_exec.so` module under a temporary PAM service; its password fallback is a test-only helper, not the host's `pam_unix`. Neither `/etc/pam.d` on the host nor the host's login configuration is changed by the test.
 
-The live image has not yet been built or booted in a VM. LightDM and the XFCE screen locker have not been verified to use this profile; live-session autologin and persistence of `/var/lib/corpse-os/` across reboot remain unresolved. Therefore this is not yet a proven boot-time PIN login flow. Do not advertise it as such until a disposable ISO/VM test verifies enrollment, login, lock-screen unlock, password recovery during PIN lockout, autologin behavior, and persistence.
+The image installs `xfce4-screensaver`, configures XFCE session locking to call `xfce4-screensaver-command --lock`, and supplies a dedicated `xfce4-screensaver` PAM stack. That stack asks `pam_unix` first so the entered token is available to the PIN verifier; successful account passwords remain a fallback, while empty passwords cannot unlock the screen. The isolated PAM test exercises PIN and password success, wrong-PIN rejection, lockout, and password recovery through this exact stack. A real lock/unlock test in the rebuilt disposable VM is still required before claiming GUI PIN unlock works. PIN persistence across reboot and autologin behavior also need separate validation.
 
 ## Tests
 
@@ -31,4 +31,4 @@ sudo python3 scripts/test-pin-auth.py
 sudo python3 scripts/test-pin-pam.py
 ```
 
-The unit test covers 4/5-digit validation, salted scrypt verification, file ownership/modes, lockout and PIN removal. The PAM test creates a temporary service and credential store and verifies PIN success, wrong-PIN rejection, lockout and password fallback. It deletes its temporary files on exit. These tests do not substitute for a built-image or VM login test.
+The unit test covers 4/5-digit validation, salted scrypt verification, file ownership/modes, lockout and PIN removal. The PAM test creates temporary service and credential files, plus a disposable system account for testing the real `pam_unix` fallback; it removes these on exit. It does not change the invoking account password or host PAM configuration. These tests do not substitute for a built-image or VM login test.

@@ -1,0 +1,10 @@
+PRETTY_NAME="H.U.M.A.N.S (based on Debian GNU/Linux 13)"
+NAME="H.U.M.A.N.S"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.7
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=H.U.M.A.N.S
+Description=AMOLED black orbital boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/corpse-os
+ScriptFile=/usr/share/plymouth/themes/corpse-os/corpse-os.script

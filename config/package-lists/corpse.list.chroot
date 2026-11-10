@@ -14,3 +14,9 @@ python3-gi
 gir1.2-gtk-3.0
 libpam-modules
 libpam-runtime
+xfce4-terminal
+xfce4-power-manager
+xfce4-screensaver
+network-manager-gnome
+mousepad
+dbus-x11

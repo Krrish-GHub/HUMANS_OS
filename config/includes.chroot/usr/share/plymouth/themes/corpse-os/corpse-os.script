@@ -1,0 +1,109 @@
+# H.U.M.A.N.S animated AMOLED boot splash.
+Window.SetBackgroundTopColor (0, 0, 0);
+Window.SetBackgroundBottomColor (0, 0, 0);
+
+frames = [];
+frames[0] = Image("frames/frame-000.png");
+frames[1] = Image("frames/frame-001.png");
+frames[2] = Image("frames/frame-002.png");
+frames[3] = Image("frames/frame-003.png");
+frames[4] = Image("frames/frame-004.png");
+frames[5] = Image("frames/frame-005.png");
+frames[6] = Image("frames/frame-006.png");
+frames[7] = Image("frames/frame-007.png");
+frames[8] = Image("frames/frame-008.png");
+frames[9] = Image("frames/frame-009.png");
+frames[10] = Image("frames/frame-010.png");
+frames[11] = Image("frames/frame-011.png");
+frames[12] = Image("frames/frame-012.png");
+frames[13] = Image("frames/frame-013.png");
+frames[14] = Image("frames/frame-014.png");
+frames[15] = Image("frames/frame-015.png");
+frames[16] = Image("frames/frame-016.png");
+frames[17] = Image("frames/frame-017.png");
+frames[18] = Image("frames/frame-018.png");
+frames[19] = Image("frames/frame-019.png");
+frames[20] = Image("frames/frame-020.png");
+frames[21] = Image("frames/frame-021.png");
+frames[22] = Image("frames/frame-022.png");
+frames[23] = Image("frames/frame-023.png");
+frames[24] = Image("frames/frame-024.png");
+frames[25] = Image("frames/frame-025.png");
+frames[26] = Image("frames/frame-026.png");
+frames[27] = Image("frames/frame-027.png");
+frames[28] = Image("frames/frame-028.png");
+frames[29] = Image("frames/frame-029.png");
+frames[30] = Image("frames/frame-030.png");
+frames[31] = Image("frames/frame-031.png");
+frames[32] = Image("frames/frame-032.png");
+frames[33] = Image("frames/frame-033.png");
+frames[34] = Image("frames/frame-034.png");
+frames[35] = Image("frames/frame-035.png");
+frames[36] = Image("frames/frame-036.png");
+frames[37] = Image("frames/frame-037.png");
+frames[38] = Image("frames/frame-038.png");
+frames[39] = Image("frames/frame-039.png");
+frames[40] = Image("frames/frame-040.png");
+frames[41] = Image("frames/frame-041.png");
+frames[42] = Image("frames/frame-042.png");
+frames[43] = Image("frames/frame-043.png");
+frames[44] = Image("frames/frame-044.png");
+frames[45] = Image("frames/frame-045.png");
+frames[46] = Image("frames/frame-046.png");
+frames[47] = Image("frames/frame-047.png");
+frames[48] = Image("frames/frame-048.png");
+frames[49] = Image("frames/frame-049.png");
+frames[50] = Image("frames/frame-050.png");
+frames[51] = Image("frames/frame-051.png");
+frames[52] = Image("frames/frame-052.png");
+frames[53] = Image("frames/frame-053.png");
+
+animation.sprite = Sprite(frames[0]);
+animation.x = Window.GetX() + Window.GetWidth() / 2 - frames[0].GetWidth() / 2;
+animation.y = Window.GetY() + Window.GetHeight() / 2 - frames[0].GetHeight() / 2;
+animation.sprite.SetPosition(animation.x, animation.y, 100);
+animation.frame = 0;
+animation.ticks = 0;
+
+fun refresh_callback ()
+{
+  animation.ticks += 1;
+  if (animation.ticks >= 3)
+    {
+      animation.ticks = 0;
+      animation.frame += 1;
+      if (animation.frame >= 54)
+        animation.frame = 10;
+      animation.sprite.SetImage(frames[animation.frame]);
+    }
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+track.image = Image("progress-track.png");
+track.sprite = Sprite(track.image);
+track.x = Window.GetX() + Window.GetWidth() / 2 - track.image.GetWidth() / 2;
+track.y = Window.GetY() + Window.GetHeight() * 0.79;
+track.sprite.SetPosition(track.x, track.y, 110);
+progress.template = Image("progress-fill.png");
+progress.sprite = Sprite();
+progress.sprite.SetPosition(track.x, track.y, 111);
+
+fun progress_callback (duration, fraction)
+{
+  if (fraction < 0)
+    fraction = 0;
+  if (fraction > 1)
+    fraction = 1;
+  width = Math.Int(progress.template.GetWidth() * fraction);
+  if (width < 1)
+    progress.sprite.SetOpacity(0);
+  else
+    {
+      progress.image = progress.template.Scale(width, progress.template.GetHeight());
+      progress.sprite.SetImage(progress.image);
+      progress.sprite.SetOpacity(1);
+    }
+}
+
+Plymouth.SetBootProgressFunction(progress_callback);

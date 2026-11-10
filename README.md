@@ -1,8 +1,8 @@
-# Corpse OS
+# H.U.M.A.N.S
 
-Corpse OS is an early, Linux-based, AI-agent-oriented operating-system project. The first milestone targets a bootable Debian live USB for x86-64 PCs and virtual machines, with a distinct desktop concept and carefully scoped local agent control.
+H.U.M.A.N.S is an early, Linux-based, AI-agent-oriented operating-system project. The first milestone targets a bootable Debian live USB for x86-64 PCs and virtual machines, with a distinct desktop concept and carefully scoped local agent control.
 
-> Project status: early public scaffold with a first-run GTK setup prototype. The image configuration and scripts are prepared, but an ISO has not yet been built or boot-tested. This is not an installer, daily-driver OS, or production security boundary.
+> Project status: early prototype. The current local ISO has booted in QEMU; this is not an installer, daily-driver OS, or production security boundary. The first-run information screen and model/theme setup still need to be checked together in the updated image.
 
 ## Goals
 
@@ -14,11 +14,11 @@ Corpse OS is an early, Linux-based, AI-agent-oriented operating-system project. 
 
 ## First-run setup prototype
 
-On an image built with the current configuration, XFCE launches a first-run GTK 3 setup window. It has three curated Ollama model profiles (general assistant, lighter coding, stronger coding), approximate model disk/RAM guidance based on the current machine, and an explicit model-install button. A separate Applications-menu entry reopens setup later. The setup can also select an existing local GGUF file for a future llama.cpp runtime; it does not download or execute that file.
+On first boot, XFCE opens a H.U.M.A.N.S information page before the existing GTK 3 model and desktop setup. The separate Applications-menu entry reopens the settings page directly. It has three curated Ollama model profiles (general assistant, lighter coding, stronger coding), approximate model disk/RAM guidance based on the current machine, and an explicit model-install button. The setup can also select an existing local GGUF file for a future llama.cpp runtime; it does not download or execute that file.
 
 The current image does not bundle Ollama or llama.cpp. If Ollama is absent, the model download button is disabled and the screen says the runtime is missing; no unverified privileged installer is run. The model download flow uses `ollama pull <curated-tag>` only after the user clicks Install and approximate RAM/home-folder free-space checks pass. Ollama may store models on a different service volume, so that destination must also be checked. The runtime, service availability, downloaded model performance, persistence across a live-session reboot, and actual hardware compatibility still need validation.
 
-Two original GTK styling presets are offered: Material-inspired and macOS-inspired. They are not an official Material UI library or macOS, and use no Apple assets or branding. Their CSS targets GTK 3 apps and GTK-based XFCE elements; non-GTK apps may not follow them. A brief, non-looping fade introduces the window; the setup remains usable without it.
+H.U.M.A.N.S Rose is the default GTK theme: warm dark surfaces with rose-red accents, applied by first-run setup to the real GTK 3 desktop session. Material-inspired and macOS-inspired remain optional original alternatives; neither is an official Material UI library or macOS, and no Apple assets or branding are used. These presets style GTK 3 apps and GTK-based XFCE elements; non-GTK apps may not follow them. The red-accented H.U.M.A.N.S Rose preset preserves the existing warm dark desktop look; hardware coverage still needs testing.
 
 Gemini is shown only as a future optional cloud integration. Google OAuth client registration, consent flow, token storage, privacy/data-transfer disclosures, and revocation controls are not implemented. The prototype does not ask for a Google password or API key and cannot sign in.
 
@@ -53,7 +53,7 @@ Test the image in a VM before writing it to removable media. The build script wi
 After a successful build, run:
 
 ```bash
-./scripts/test-iso.sh build/corpse-os-amd64.iso
+./scripts/test-iso.sh build/humans-os-amd64.iso
 ```
 
 This starts QEMU with a disposable 4 GiB RAM VM and no disk passthrough. Confirm the live desktop reaches the login/session screen. This is a manual smoke test, not proof of hardware compatibility.
@@ -67,7 +67,7 @@ The first agent prototype is intended to be local and permissioned. Model output
 ## Current limits
 
 - No custom installer, OTA updater, hardware compatibility claim, or secure-boot claim yet.
-- No ISO has been built or boot-validated, and the setup UI has not been exercised in a running XFCE session.
+- The current ISO has booted in QEMU; the first-run wizard and live XFCE session still need end-to-end verification in the updated build.
 - No integrated agent service exists; the setup window does not yet install Ollama or llama.cpp itself.
 - Gemini/Google sign-in is not configured; any future cloud provider must be optional and require explicit opt-in and data disclosure.
 - No model is “trained on your machine” by default; local personalization should begin with user-controlled preferences and memory.

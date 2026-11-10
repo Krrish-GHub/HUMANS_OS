@@ -25,7 +25,7 @@ def current_user():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Manage the local Corpse OS login/unlock PIN.")
+    parser = argparse.ArgumentParser(description="Manage the local H.U.M.A.N.S login/unlock PIN.")
     parser.add_argument("action", choices=("enroll", "disable"))
     args = parser.parse_args()
     try:

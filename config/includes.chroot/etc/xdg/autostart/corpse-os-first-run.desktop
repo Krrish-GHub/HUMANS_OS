@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Corpse OS First Run
+Name=H.U.M.A.N.S First Run
 Comment=Optional first-run model and desktop setup
 Exec=/usr/bin/python3 /usr/lib/corpse-os/corpse-setup.py
 Terminal=false

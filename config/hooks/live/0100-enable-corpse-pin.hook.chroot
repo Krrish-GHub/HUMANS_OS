@@ -3,7 +3,7 @@
 # Runs inside the disposable image build chroot, never on the build host.
 set -eu
 
-for path in /usr/bin/pam-auth-update /usr/lib/corpse-os/corpse-pin-auth.py /usr/lib/corpse-os/corpse-pin-admin.py; do
+for path in /usr/sbin/pam-auth-update /usr/lib/corpse-os/corpse-pin-auth /usr/lib/corpse-os/corpse-pin-auth.py /usr/lib/corpse-os/corpse-pin-admin.py; do
     if [ ! -x "$path" ]; then
         echo "Missing executable PIN component: $path" >&2
         exit 1
@@ -16,10 +16,12 @@ for path in /usr/lib/corpse-os/corpse_pin.py /usr/share/pam-configs/corpse-pin; 
     fi
 done
 
+chown root:root /usr/lib/corpse-os/corpse-pin-auth
+chmod 4755 /usr/lib/corpse-os/corpse-pin-auth
 install -d -o root -g root -m 0700 /var/lib/corpse-os/pins /var/lib/corpse-os/pin-state
-/usr/bin/pam-auth-update --package --enable corpse-pin
+/usr/sbin/pam-auth-update --package --enable corpse-pin
 
-if ! grep -Fq '/usr/lib/corpse-os/corpse-pin-auth.py' /etc/pam.d/common-auth; then
+if ! grep -Fq '/usr/lib/corpse-os/corpse-pin-auth' /etc/pam.d/common-auth; then
     echo "PIN profile was not added to common-auth; refusing an incomplete image." >&2
     exit 1
 fi

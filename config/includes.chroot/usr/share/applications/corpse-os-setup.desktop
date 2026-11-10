@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Corpse OS Setup
+Name=H.U.M.A.N.S Setup
 Comment=Choose a local model and desktop appearance
 Exec=/usr/bin/python3 /usr/lib/corpse-os/corpse-setup.py --settings
 Icon=preferences-desktop-theme

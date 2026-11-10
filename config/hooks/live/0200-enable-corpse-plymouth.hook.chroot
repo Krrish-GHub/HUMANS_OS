@@ -1,0 +1,31 @@
+#!/bin/sh
+# Select the custom Plymouth theme inside the image build chroot.
+set -eu
+
+theme_dir=/usr/share/plymouth/themes/corpse-os
+for required in \
+    "$theme_dir/corpse-os.plymouth" \
+    "$theme_dir/corpse-os.script" \
+    "$theme_dir/progress-track.png" \
+    "$theme_dir/progress-fill.png"; do
+    if [ ! -s "$required" ]; then
+        echo "Missing H.U.M.A.N.S Plymouth asset: $required" >&2
+        exit 1
+    fi
+done
+
+if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then
+    echo "Plymouth theme selector is missing from the image chroot." >&2
+    exit 1
+fi
+
+plymouth-set-default-theme --rebuild-initrd corpse-os
+
+if ! find "$theme_dir/frames" -maxdepth 1 -type f -name 'frame-*.png' -print -quit | grep -q .; then
+    echo "H.U.M.A.N.S Plymouth animation frames were not installed." >&2
+    exit 1
+fi
+if ! find /boot -maxdepth 1 -type f -name 'initrd.img-*' -print -quit | grep -q .; then
+    echo "No initramfs was generated after selecting the H.U.M.A.N.S Plymouth theme." >&2
+    exit 1
+fi
