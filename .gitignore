@@ -6,5 +6,8 @@
 !/config/includes.chroot/usr/share/
 !/config/includes.chroot/usr/share/applications/
 !/config/includes.chroot/usr/share/applications/corpse-os-welcome.desktop
+!/config/hooks/
+!/config/hooks/live/
+!/config/hooks/live/0100-enable-corpse-pin.hook.chroot
 *.iso
 *.log

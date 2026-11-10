@@ -34,3 +34,9 @@ A later local agent service should have four distinct layers:
 ## Desktop concept
 
 The current setup prototypes an animated introduction and two optional GTK 3 styling presets. They are intentionally modest, can be skipped, and do not replace a fully designed desktop shell. Future motion should respect reduced-motion settings and remain usable with assistive technology.
+
+## Optional local PIN authentication
+
+The image hook `config/hooks/live/0100-enable-corpse-pin.hook.chroot` enables the Debian PAM profile `corpse-pin` in the image's `common-auth` stack. It runs only inside the image-build chroot and must not change the build host's PAM setup. The profile invokes the root-executed `pam_exec.so` verifier before Unix account-password authentication. A configured 4/5-digit PIN can authenticate; the account password remains the recovery path. Enrollment and removal are administrator-authorized CLI operations.
+
+PIN verifiers use random-salted scrypt; verifier and lockout files are root-owned mode 0600 beneath `/var/lib/corpse-os/`. Five wrong PIN attempts in the tracked window trigger a 15-minute PIN lockout without disabling password recovery. This is password-equivalent session authentication, not TPM-backed Windows Hello, biometric login, disk encryption, or pre-boot unlock. See [PIN login notes](pin-login.md) for tests and deployment limitations.

@@ -1,0 +1,6 @@
+Name: Corpse OS device-local PIN
+Default: no
+Priority: 512
+Auth-Type: Primary
+Auth:
+	sufficient	pam_exec.so expose_authtok quiet /usr/lib/corpse-os/corpse-pin-auth.py

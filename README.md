@@ -24,6 +24,12 @@ Gemini is shown only as a future optional cloud integration. Google OAuth client
 
 Preferences are stored per-user under `~/.config/corpse-os/`. Choosing a profile is not the same as installing its model. AI agent execution is not implemented in this prototype; the setup itself grants no AI process access to files or elevated privileges.
 
+## Optional local login PIN
+
+The image build config adds an optional Linux-PAM path for a four- or five-digit local login/unlock PIN. PINs use a salted scrypt verifier in root-only storage, with a five-attempt lockout; the existing account password remains the recovery route. After enrollment by an administrator, the same login prompt can accept either credential. Enroll or disable with `sudo /usr/lib/corpse-os/corpse-pin-admin.py enroll` or `disable` (PINs are entered through a hidden prompt, never command arguments).
+
+This is not TPM-backed Windows Hello or a disk-encryption/pre-boot PIN. No ISO or VM login has been verified, and live-session auto-login and storage persistence remain open; do not treat this as a proven boot-time login feature. See [PIN login notes](docs/pin-login.md).
+
 ## Build the live image
 
 On a Debian or Ubuntu x86-64 build host, install the prerequisites and run:

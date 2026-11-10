@@ -1,0 +1,25 @@
+#!/bin/sh
+# Configure the optional device-local PIN in Debian's shared PAM auth stack.
+# Runs inside the disposable image build chroot, never on the build host.
+set -eu
+
+for path in /usr/bin/pam-auth-update /usr/lib/corpse-os/corpse-pin-auth.py /usr/lib/corpse-os/corpse-pin-admin.py; do
+    if [ ! -x "$path" ]; then
+        echo "Missing executable PIN component: $path" >&2
+        exit 1
+    fi
+done
+for path in /usr/lib/corpse-os/corpse_pin.py /usr/share/pam-configs/corpse-pin; do
+    if [ ! -f "$path" ]; then
+        echo "Missing PIN authentication component: $path" >&2
+        exit 1
+    fi
+done
+
+install -d -o root -g root -m 0700 /var/lib/corpse-os/pins /var/lib/corpse-os/pin-state
+/usr/bin/pam-auth-update --package --enable corpse-pin
+
+if ! grep -Fq '/usr/lib/corpse-os/corpse-pin-auth.py' /etc/pam.d/common-auth; then
+    echo "PIN profile was not added to common-auth; refusing an incomplete image." >&2
+    exit 1
+fi
