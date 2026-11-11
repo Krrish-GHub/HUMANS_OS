@@ -41,6 +41,7 @@ class AgentTests(unittest.TestCase):
         agent.CONFIG_DIR = self.root / "config"
         agent.CONFIG_FILE = agent.CONFIG_DIR / "config.json"
         agent.CONTEXT_FILE = agent.CONFIG_DIR / "context.txt"
+        agent.RECOMMENDATION_PREFERENCES_FILE = agent.CONFIG_DIR / "recommendation-preferences.json"
 
     def test_provider_config_stores_only_provider_and_model_private(self):
         agent.save_config("gemini-2.5-flash")
@@ -254,6 +255,173 @@ class AgentTests(unittest.TestCase):
             agent.dispatch_tool("youtube_search_public", {"query": "x", "url": "https://evil.invalid"},
                                 confirm=mock.Mock(), runner=runner)
         runner.assert_not_called()
+
+    def test_recommendation_preference_save_and_clear_are_private(self):
+        agent.save_recommendation_preference("cats and science videos")
+        self.assertEqual(agent.load_recommendation_preference(), "cats and science videos")
+        self.assertEqual(agent.RECOMMENDATION_PREFERENCES_FILE.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(agent.CONFIG_DIR.stat().st_mode & 0o777, 0o700)
+        self.assertTrue(agent.clear_recommendation_preference())
+        self.assertFalse(agent.clear_recommendation_preference())
+        self.assertIsNone(agent.load_recommendation_preference())
+
+    def test_youtube_search_results_parse_real_renderers_deduplicate_and_reject_bad_ids(self):
+        data = {"contents": {"items": [
+            {"videoRenderer": {
+                "videoId": "abcdefghijk",
+                "title": {"runs": [{"text": "A &amp; B\nvideo"}]},
+                "ownerText": {"runs": [{"text": "Channel One"}]},
+            }},
+            {"videoRenderer": {"videoId": "abcdefghijk", "title": {"simpleText": "duplicate"},
+                                "ownerText": {"simpleText": "Channel One"}}},
+            {"videoRenderer": {"videoId": "bad-id", "title": {"simpleText": "bad"},
+                                "ownerText": {"simpleText": "Channel One"}}},
+            {"videoRenderer": {"videoId": "lmnopqrstuv", "title": {"simpleText": "Second"},
+                                "ownerText": {"simpleText": "Channel Two"}}},
+        ]}}
+        html = "<html><script>var ytInitialData = " + json.dumps(data) + ";</script></html>"
+        self.assertEqual(agent.parse_youtube_search_results(html), [
+            {"video_id": "abcdefghijk", "title": "A & B video", "channel": "Channel One"},
+            {"video_id": "lmnopqrstuv", "title": "Second", "channel": "Channel Two"},
+        ])
+        with self.assertRaises(RuntimeError):
+            agent.parse_youtube_search_results("<html>no rendered data</html>")
+
+    def test_youtube_search_uses_fixed_public_host_and_parses_real_results(self):
+        data = {"videoRenderer": {"videoId": "abcdefghijk", "title": {"simpleText": "A video"},
+                                  "ownerText": {"simpleText": "A channel"}}}
+        page = "var ytInitialData = " + json.dumps(data) + ";"
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def geturl(self): return "https://www.youtube.com/results?search_query=space"
+            def read(self, limit): return page.encode()
+        captured = {}
+        def opener(request, timeout):
+            captured["url"] = request.full_url
+            captured["timeout"] = timeout
+            return Response()
+        results = agent.youtube_search_videos("space documentary", opener=opener)
+        self.assertEqual(captured["url"], "https://www.youtube.com/results?search_query=space+documentary")
+        self.assertEqual(captured["timeout"], 15)
+        self.assertEqual(results[0]["video_id"], "abcdefghijk")
+
+    @mock.patch.object(agent, "shutil_which", return_value="/usr/bin/xdg-open")
+    def test_open_exact_selected_video_requires_confirmation_and_uses_fixed_watch_url(self, _):
+        calls = []
+        result = agent.youtube_open_video("abcdefghijk", confirm=lambda prompt: calls.append(prompt) or "yes",
+                                          runner=lambda argv, **kwargs: calls.append(argv) or Completed(),
+                                          title="A real video", channel="A channel")
+        self.assertTrue(result["opened"])
+        self.assertEqual(calls[1], ["xdg-open", "https://www.youtube.com/watch?v=abcdefghijk"])
+        self.assertIn("A real video", calls[0])
+        self.assertIn("may record a view", calls[0])
+        runner = mock.Mock()
+        declined = agent.youtube_open_video("abcdefghijk", confirm=lambda _: "no", runner=runner)
+        self.assertFalse(declined["opened"])
+        runner.assert_not_called()
+        with self.assertRaises(ValueError):
+            agent.youtube_open_video("https://evil.invalid", confirm=mock.Mock(), runner=runner)
+        runner.assert_not_called()
+
+    def test_fetch_recommendations_requires_youtube_consent_and_only_returns_distinct_videos(self):
+        ideas = [
+            {"title": "funny", "reason": "brief", "search_query": "clean comedy"},
+            {"title": "science", "reason": "curious", "search_query": "fun science"},
+            {"title": "relax", "reason": "calm", "search_query": "calming nature"},
+        ]
+        search = mock.Mock(side_effect=[
+            [{"video_id": "abcdefghijk", "title": "One", "channel": "A"}],
+            [{"video_id": "abcdefghijk", "title": "One", "channel": "A"},
+             {"video_id": "lmnopqrstuv", "title": "Two", "channel": "B"}],
+            [],
+        ])
+        with mock.patch.object(agent, "youtube_search_videos", search):
+            videos = agent.fetch_recommendation_videos(ideas, confirm=lambda prompt: "yes")
+        self.assertEqual([video["video_id"] for video in videos], ["abcdefghijk", "lmnopqrstuv"])
+        self.assertIn("science", videos[1]["idea"])
+        self.assertEqual(search.call_count, 3)
+        search.reset_mock()
+        output = []
+        with mock.patch.object(agent, "youtube_search_videos", search):
+            self.assertEqual(agent.fetch_recommendation_videos(ideas, confirm=lambda _: "no", write=output.append), [])
+        search.assert_not_called()
+        self.assertIn("declined", output[0])
+
+    def test_recommendation_flow_surprise_picks_real_video_and_requires_open_confirmation(self):
+        answers = iter(["something funny while eating", "yes", "yes", "s", "yes"])
+        output = []
+        ideas = [
+            {"title": "Short comedy", "reason": "Quick and light.", "search_query": "short clean comedy"},
+            {"title": "Food science", "reason": "Interesting with a meal.", "search_query": "food science fun facts"},
+            {"title": "Animal clips", "reason": "A relaxed option.", "search_query": "funny animal clips"},
+        ]
+        videos = [
+            {"video_id": "abcdefghijk", "title": "First video", "channel": "First channel",
+             "idea": "Short comedy", "reason": "Quick", "search_query": "short clean comedy"},
+            {"video_id": "lmnopqrstuv", "title": "Food science short", "channel": "Second channel",
+             "idea": "Food science", "reason": "Light", "search_query": "food science fun facts"},
+        ]
+        captured = {}
+        def fake_gemini(basis, model, key, opener=None):
+            captured["basis"] = basis
+            captured["model"] = model
+            captured["key"] = key
+            return ideas
+        def open_video(video_id, confirm, runner, title, channel):
+            captured["open"] = (video_id, title, channel)
+            self.assertEqual(confirm("open?"), "yes")
+            return {"video_id": video_id, "opened": True}
+        with mock.patch.object(agent, "load_config", return_value={"model": "gemini-test"}), \
+             mock.patch.object(agent, "_secret_tool", return_value="test-key"), \
+             mock.patch.object(agent, "generate_video_ideas", side_effect=fake_gemini), \
+             mock.patch.object(agent, "fetch_recommendation_videos", return_value=videos), \
+             mock.patch.object(agent, "youtube_open_video", side_effect=open_video):
+            agent.recommend_videos(confirm=lambda prompt: next(answers),
+                                   read_input=lambda prompt: next(answers), write=output.append,
+                                   chooser=lambda choices: choices[1])
+        self.assertEqual(captured["basis"], "something funny while eating")
+        self.assertEqual(captured["open"], ("lmnopqrstuv", "Food science short", "Second channel"))
+        self.assertEqual(agent.load_recommendation_preference(), "something funny while eating")
+        self.assertTrue(any("Surprise Me picked: Food science short" in line for line in output))
+
+    def test_recommendation_opening_declined_does_not_open_video(self):
+        answers = iter(["cats", "no", "yes", "no"])
+        videos = [{"video_id": "abcdefghijk", "title": "One", "channel": "A", "idea": "x"},
+                  {"video_id": "lmnopqrstuv", "title": "Two", "channel": "B", "idea": "y"}]
+        with mock.patch.object(agent, "load_config", return_value={"model": "test"}), \
+             mock.patch.object(agent, "_secret_tool", return_value="key"), \
+             mock.patch.object(agent, "generate_video_ideas", return_value=[]), \
+             mock.patch.object(agent, "fetch_recommendation_videos", side_effect=lambda ideas, confirm, **kwargs: [] if confirm("search?") == "no" else videos), \
+             mock.patch.object(agent, "youtube_open_video") as open_video:
+            agent.recommend_videos(confirm=lambda _: next(answers), read_input=lambda _: next(answers), write=lambda _: None)
+        open_video.assert_not_called()
+
+    def test_recommendation_requires_user_basis_and_rejects_url_queries(self):
+        output = []
+        with mock.patch.object(agent, "load_config", return_value={"model": "gemini-test"}), \
+             mock.patch.object(agent, "_secret_tool", return_value="test-key"), \
+             mock.patch.object(agent, "gemini_request") as request:
+            agent.recommend_videos(confirm=lambda _: "yes", read_input=lambda _: "  ", write=output.append)
+        request.assert_not_called()
+        self.assertIn("I won't guess your taste", output[-1])
+        with self.assertRaises(RuntimeError):
+            agent.parse_recommendations([{"text": json.dumps({"recommendations": [
+                {"title": "A", "reason": "R", "search_query": "https://example.com"},
+                {"title": "B", "reason": "R", "search_query": "query"},
+                {"title": "C", "reason": "R", "search_query": "query"},
+            ]})}])
+
+    def test_gemini_recommendation_request_is_json_without_action_tools(self):
+        captured = {}
+        def opener(request, timeout):
+            captured["body"] = json.loads(request.data)
+            return FakeResponse({"candidates": [{"content": {"parts": [{"text": "{\"recommendations\":[]}"}]}}]})
+        agent.gemini_request("gemini-test", "key", "recommend videos", opener=opener,
+                             tools_enabled=False, response_schema=agent.RECOMMENDATION_SCHEMA)
+        self.assertNotIn("tools", captured["body"])
+        self.assertEqual(captured["body"]["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(captured["body"]["generationConfig"]["responseSchema"], agent.RECOMMENDATION_SCHEMA)
 
     def test_http_error_does_not_leak_api_key(self):
         import urllib.error

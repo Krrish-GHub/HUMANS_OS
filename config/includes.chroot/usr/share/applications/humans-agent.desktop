@@ -6,9 +6,14 @@ Exec=xfce4-terminal --execute humans-agent chat
 Icon=utilities-terminal
 Terminal=false
 Categories=Utility;System;
-Actions=Configure;
+Actions=Configure;Recommend;
 
 [Desktop Action Configure]
 Name=Configure Gemini API key
 Exec=xfce4-terminal --execute humans-agent configure
+OnlyShowIn=XFCE;
+
+[Desktop Action Recommend]
+Name=Get video recommendations
+Exec=humans-agent recommend-ui
 OnlyShowIn=XFCE;
