@@ -1,5 +1,7 @@
 # H.U.M.A.N.S: initial architecture and safety boundaries
 
+For the selectable Gemini/other-provider agent, personal context, typed local-control bridge, permission model, and delivery sequence, see [the agent architecture proposal](agent-architecture.md). It is a design proposal; those agent capabilities are not implemented yet.
+
 ## First milestone: live desktop
 
 - Base: Debian Live, `amd64`, XFCE desktop.
