@@ -12,6 +12,7 @@ python3-pip
 qemu-guest-agent
 python3-gi
 gir1.2-gtk-3.0
+libgtk-3-bin
 libpam-modules
 libpam-runtime
 xfce4-terminal
@@ -20,3 +21,5 @@ xfce4-screensaver
 network-manager-gnome
 mousepad
 dbus-x11
+gnome-keyring
+libsecret-tools

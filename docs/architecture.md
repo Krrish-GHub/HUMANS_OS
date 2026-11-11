@@ -1,6 +1,6 @@
 # H.U.M.A.N.S: initial architecture and safety boundaries
 
-For the selectable Gemini/other-provider agent, personal context, typed local-control bridge, permission model, and delivery sequence, see [the agent architecture proposal](agent-architecture.md). It is a design proposal; those agent capabilities are not implemented yet.
+For the Gemini agent MVP, its limited Wi-Fi and app-launch tools, and remaining implementation gaps, see [the agent architecture proposal](agent-architecture.md). The rebuilt local ISO reaches the H.U.M.A.N.S setup screen in QEMU; physical hardware and live API behavior still need testing.
 
 ## First milestone: live desktop
 

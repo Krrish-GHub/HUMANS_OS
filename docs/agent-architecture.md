@@ -49,7 +49,7 @@ Keep a user-controlled profile and memory separate from chat transcripts and pro
 2. **Provider choice:** implement the adapter interface and settings for Gemini plus one alternative or local provider. Securely store/revoke API credentials. Verify provider failures and local-only behavior.
 3. **Context:** add opt-in, editable profile/memory with provenance and per-request context selection. Test that irrelevant or sensitive items are not sent.
 4. **First real action:** implement a narrow, non-root Wi-Fi status/toggle path using NetworkManager DBus or a similarly constrained interface. Add permission prompt, state verification, failure handling and tests for model prompt injection. Do not expose `nmcli` as free-form shell.
-5. **Useful desktop tasks:** add launch/open operations and scoped file read/search. Add preview-and-approve for writes and installs, with sandbox and path/symlink tests.
+5. **Useful desktop tasks:** the source now lists visible desktop entries and can launch one listed application after a fresh confirmation. Scoped file read/search and preview-and-approve for writes or installs remain next, with sandbox and path/symlink tests.
 6. **YouTube:** begin with public search. Add Google OAuth only if personalized account data is needed; test scopes, revocation, no-token handling and privacy disclosure.
 7. **Persistence and release readiness:** test saved settings/context across reboot, keyring behavior, offline recovery, accessibility and resource use; only then test on spare hardware. Keep real-hardware compatibility separate from VM evidence.
 
@@ -64,4 +64,6 @@ Keep a user-controlled profile and memory separate from chat transcripts and pro
 
 ## Current implementation boundary
 
-The existing first-run setup and GTK themes are prototypes; model setup can store a selected preference but does not yet bundle an agent runtime. Gemini OAuth/key handling and the actual tool broker are not implemented. The project should update its implementation status only after each acceptance test has passing evidence; this document is a proposed design, not a claim that these features exist.
+A small executable MVP exists at `config/includes.chroot/usr/lib/humans-agent/agent.py` and is included in the rebuilt ISO with a desktop launcher. It configures the Gemini model, stores the API key through `secret-tool` in the desktop Secret Service, supports optional owner-only context with a per-request Google data-transfer confirmation, and exposes Wi-Fi status, typed Wi-Fi enable/disable, listing visible applications, and launching a listed application. State-changing requests require a fresh interactive confirmation; Wi-Fi state is verified using NetworkManager. `scripts/test-agent.py` covers the provider request contract, API-key redaction, typed-tool allowlisting, app selection and confirmation, and Wi-Fi state verification. The ISO boots in QEMU to the H.U.M.A.N.S setup screen; all 13 offline tests pass.
+
+This remains an early MVP, not production-ready: no live Gemini request, actual Secret Service operation, real Wi-Fi change, malicious-content end-to-end test, or persistence across reboot has been tested. Google-account OAuth, YouTube/history access, generic system automation, broader personal-data integrations, and unrestricted shell/root remain out of scope.

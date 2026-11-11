@@ -20,9 +20,15 @@ The current image does not bundle Ollama or llama.cpp. If Ollama is absent, the 
 
 H.U.M.A.N.S Rose is the default GTK theme: warm dark surfaces with rose-red accents, applied by first-run setup to the real GTK 3 desktop session. Material-inspired and macOS-inspired remain optional original alternatives; neither is an official Material UI library or macOS, and no Apple assets or branding are used. These presets style GTK 3 apps and GTK-based XFCE elements; non-GTK apps may not follow them. The red-accented H.U.M.A.N.S Rose preset preserves the existing warm dark desktop look; hardware coverage still needs testing.
 
-Gemini is shown only as a future optional cloud integration. Google OAuth client registration, consent flow, token storage, privacy/data-transfer disclosures, and revocation controls are not implemented. The prototype does not ask for a Google password or API key and cannot sign in.
+Gemini API access is an optional first agent prototype, separate from Google-account OAuth. The agent can be configured with a Gemini API key stored in the desktop Secret Service; it never writes the key to its configuration file. The current local ISO includes the agent and has booted in QEMU to the H.U.M.A.N.S setup screen.
 
-Preferences are stored per-user under `~/.config/corpse-os/`. Choosing a profile is not the same as installing its model. AI agent execution is not implemented in this prototype; the setup itself grants no AI process access to files or elevated privileges.
+### Agent MVP
+
+The source adds a small interactive Gemini agent and a fixed local-tool broker. Configure it in a desktop session with `humans-agent configure` (the key is entered with hidden input); optionally edit your own local context with `humans-agent context-edit`. Each request tells you what will be sent to Google Gemini and asks before sending. The context is stored at `~/.config/humans-agent/context.txt` with owner-only permissions.
+
+The local tools report Wi-Fi status, list visible installed desktop apps, and offer `set_wifi_enabled` plus `launch_application`. Each state-changing action needs a fresh confirmation; Wi-Fi uses fixed `nmcli` arguments and verifies the resulting state, while app launch uses the app's listed desktop ID through `gtk-launch`. There is no model-provided shell, root access, Google-account access, YouTube integration, or arbitrary file access. Remove the saved key with `humans-agent forget-key`. The desktop menu entry starts `humans-agent chat`.
+
+The rebuilt local ISO includes the app launcher and reaches the setup screen in QEMU; all 13 offline tests pass. No live Gemini request, real Secret Service operation, or real Wi-Fi radio change has been tested. The existing first-run preferences remain under `~/.config/corpse-os/`; the separate agent stores its settings under `~/.config/humans-agent/`.
 
 ## Optional local login PIN
 
