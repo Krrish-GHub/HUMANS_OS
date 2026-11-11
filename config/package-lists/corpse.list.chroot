@@ -19,6 +19,7 @@ xfce4-terminal
 xfce4-power-manager
 xfce4-screensaver
 network-manager-gnome
+xdg-utils
 mousepad
 dbus-x11
 gnome-keyring
