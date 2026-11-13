@@ -32,6 +32,7 @@ CONFIG_DIR = Path(os.environ.get("HUMANS_AGENT_CONFIG_DIR", Path.home() / ".conf
 CONFIG_FILE = CONFIG_DIR / "config.json"
 CONTEXT_FILE = CONFIG_DIR / "context.txt"
 RECOMMENDATION_PREFERENCES_FILE = CONFIG_DIR / "recommendation-preferences.json"
+RECOMMENDATION_FEEDBACK_FILE = CONFIG_DIR / "recommendation-feedback.json"
 MODEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 APPLICATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,198}\.desktop$")
 APPLICATION_DIRS = tuple(
@@ -374,6 +375,100 @@ def clear_recommendation_preference():
     return True
 
 
+def load_recommendation_feedback():
+    try:
+        data = json.loads(RECOMMENDATION_FEEDBACK_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError):
+        raise RuntimeError("Saved video feedback could not be read; remove its file and try again.") from None
+    if not isinstance(data, dict) or set(data) != {"videos"} or not isinstance(data["videos"], list):
+        raise RuntimeError("Saved video feedback has an invalid format; remove its file and try again.")
+    if len(data["videos"]) > 100:
+        raise RuntimeError("Saved video feedback exceeds the local safety limit; remove its file and try again.")
+    cleaned = []
+    seen = set()
+    for item in data["videos"]:
+        if not isinstance(item, dict) or set(item) != {"video_id", "title", "channel", "rating"}:
+            raise RuntimeError("Saved video feedback has an invalid entry; remove its file and try again.")
+        video_id, title, channel, rating = (item[key] for key in ("video_id", "title", "channel", "rating"))
+        if (not isinstance(video_id, str) or not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id)
+                or video_id in seen or not isinstance(title, str) or not title.strip() or len(title) > 200
+                or not isinstance(channel, str) or not channel.strip() or len(channel) > 120
+                or not isinstance(rating, str) or rating not in {"like", "dislike"}
+                or any(ord(char) < 32 or ord(char) == 127 for value in (title, channel) for char in value)):
+            raise RuntimeError("Saved video feedback has an invalid entry; remove its file and try again.")
+        seen.add(video_id)
+        cleaned.append({"video_id": video_id, "title": title.strip(),
+                        "channel": channel.strip(), "rating": rating})
+    return cleaned
+
+
+def record_recommendation_feedback(video, rating):
+    if not isinstance(video, dict) or not isinstance(rating, str) or rating not in {"like", "dislike"}:
+        raise ValueError("Choose like or not for me on a listed video.")
+    video_id = video.get("video_id")
+    title = video.get("title")
+    channel = video.get("channel")
+    if (not isinstance(video_id, str) or not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id)
+            or not isinstance(title, str) or not title.strip() or len(title) > 200
+            or not isinstance(channel, str) or not channel.strip() or len(channel) > 120
+            or any(ord(char) < 32 or ord(char) == 127 for value in (title, channel) for char in value)):
+        raise ValueError("That video result cannot be saved as feedback.")
+    records = load_recommendation_feedback()
+    record = {"video_id": video_id, "title": title.strip(),
+              "channel": channel.strip(), "rating": rating}
+    records = [item for item in records if item["video_id"] != video_id]
+    records.append(record)
+    records = records[-100:]
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(CONFIG_DIR, 0o700)
+    fd, temp_name = tempfile.mkstemp(prefix="recommendation-feedback.", dir=CONFIG_DIR)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump({"videos": records}, stream, ensure_ascii=False, sort_keys=True)
+            stream.write("\n")
+        os.replace(temp_name, RECOMMENDATION_FEEDBACK_FILE)
+        os.chmod(RECOMMENDATION_FEEDBACK_FILE, 0o600)
+    finally:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+    return records
+
+
+def clear_recommendation_feedback():
+    try:
+        RECOMMENDATION_FEEDBACK_FILE.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _recommendation_terms(video):
+    stop_words = {"and", "are", "for", "from", "how", "not", "the", "this", "with", "you", "your", "video", "videos"}
+    text = f"{video.get('title', '')} {video.get('channel', '')}".casefold()
+    return {term for term in re.findall(r"[a-z0-9]{3,}", text) if term not in stop_words}
+
+
+def rank_recommendation_videos(videos, feedback):
+    """Reorder public candidates locally; feedback is never sent to Gemini or YouTube."""
+    weights = {}
+    for item in feedback:
+        if (not isinstance(item, dict) or not isinstance(item.get("rating"), str)
+                or item["rating"] not in {"like", "dislike"}):
+            continue
+        weight = 1 if item["rating"] == "like" else -2
+        for term in _recommendation_terms(item):
+            weights[term] = weights.get(term, 0) + weight
+    return [video for _index, video in sorted(
+        enumerate(videos),
+        key=lambda pair: (-sum(weights.get(term, 0) for term in _recommendation_terms(pair[1])), pair[0])
+    )]
+
+
 def parse_recommendations(parts):
     text = "\n".join(part["text"] for part in parts
                      if isinstance(part, dict) and isinstance(part.get("text"), str))
@@ -606,6 +701,7 @@ def recommend_videos(confirm=input, read_input=input, write=print,
     ideas = generate_video_ideas(basis, settings["model"], key, opener=opener)
     write("Finding matching public YouTube videos…")
     videos = fetch_recommendation_videos(ideas, confirm=confirm, opener=opener, write=write)
+    videos = rank_recommendation_videos(videos, load_recommendation_feedback())
     return _select_and_open_videos(videos, read_input, confirm, write, runner=runner, chooser=chooser)
 
 
@@ -647,7 +743,7 @@ def build_recommendation_window():
     root.pack_start(entry, False, False, 0)
     remember = Gtk.CheckButton(label="Remember this preference on this device")
     root.pack_start(remember, False, False, 0)
-    privacy = Gtk.Label(label="Only the text you choose is sent to Gemini after you approve. Your watch history is never read. YouTube search terms and opening a video each need separate approval.")
+    privacy = Gtk.Label(label="Only your chosen topic is sent to Gemini after approval. Ratings stay on this device; watch history is never read. YouTube search and opening a video each need separate approval.")
     privacy.set_xalign(0)
     privacy.set_line_wrap(True)
     root.pack_start(privacy, False, False, 0)
@@ -671,7 +767,12 @@ def build_recommendation_window():
     root.pack_start(scroller, True, True, 0)
     results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
     scroller.add(results_box)
-    state = {"videos": [], "busy": False}
+    try:
+        feedback = load_recommendation_feedback()
+    except RuntimeError as exc:
+        feedback = []
+        status.set_text(str(exc))
+    state = {"videos": [], "busy": False, "feedback": feedback}
 
     def consent(title, body):
         dialog = Gtk.MessageDialog(transient_for=window, modal=True,
@@ -697,6 +798,7 @@ def build_recommendation_window():
         threading.Thread(target=worker, daemon=True).start()
 
     def show_videos(videos):
+        videos = rank_recommendation_videos(videos, state["feedback"])
         state["videos"] = videos
         for child in results_box.get_children():
             results_box.remove(child)
@@ -706,7 +808,7 @@ def build_recommendation_window():
             return
         status.set_text(f"{len(videos)} public video picks. Search titles/channels are from YouTube; suitability isn’t verified.")
         for index, video in enumerate(videos, 1):
-            card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             card.set_border_width(12)
             card.get_style_context().add_class("view")
             info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -720,9 +822,17 @@ def build_recommendation_window():
             info.pack_start(title, False, False, 0)
             info.pack_start(channel, False, False, 0)
             card.pack_start(info, True, True, 0)
+            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             open_button = Gtk.Button(label="Open video")
             open_button.connect("clicked", lambda _button, item=video: open_video(item))
-            card.pack_end(open_button, False, False, 0)
+            actions.pack_start(open_button, False, False, 0)
+            like_button = Gtk.Button(label="👍 Like")
+            dislike_button = Gtk.Button(label="👎 Not for me")
+            like_button.connect("clicked", lambda _button, item=video: save_feedback(item, "like"))
+            dislike_button.connect("clicked", lambda _button, item=video: save_feedback(item, "dislike"))
+            actions.pack_start(like_button, False, False, 0)
+            actions.pack_start(dislike_button, False, False, 0)
+            card.pack_start(actions, False, False, 0)
             results_box.pack_start(card, False, False, 0)
         surprise_button.set_sensitive(True)
         results_box.show_all()
@@ -739,6 +849,15 @@ def build_recommendation_window():
             status.set_text(str(exc))
             return
         status.set_text("Opened the selected video in your browser.")
+
+    def save_feedback(video, rating):
+        try:
+            state["feedback"] = record_recommendation_feedback(video, rating)
+        except (OSError, RuntimeError, ValueError) as exc:
+            status.set_text(f"Could not save feedback locally: {exc}")
+            return
+        label = "Liked" if rating == "like" else "Noted; I'll avoid similar picks"
+        status.set_text(f"{label}. Saved on this device only; it isn't sent to Gemini.")
 
     def on_surprise(_button):
         if state["videos"]:
@@ -955,6 +1074,7 @@ def main(argv=None):
     sub.add_parser("context-edit", help="edit optional personal context stored locally")
     sub.add_parser("forget-key", help="remove the saved Gemini key from the desktop keyring")
     sub.add_parser("forget-recommendation-preference", help="clear the locally saved YouTube recommendation preference")
+    sub.add_parser("forget-recommendation-feedback", help="clear local Like/Not for me video ratings")
     sub.add_parser("recommend", help="get preference-based YouTube video suggestions in the terminal")
     sub.add_parser("recommend-ui", help="open the graphical preference-based video picker")
     sub.add_parser("chat", help="start the interactive Gemini agent")
@@ -972,6 +1092,9 @@ def main(argv=None):
         elif args.command == "forget-recommendation-preference":
             print("Saved YouTube recommendation preference cleared." if clear_recommendation_preference()
                   else "No saved YouTube recommendation preference.")
+        elif args.command == "forget-recommendation-feedback":
+            print("Saved video feedback cleared." if clear_recommendation_feedback()
+                  else "No saved video feedback.")
         elif args.command == "recommend":
             recommend_videos()
         elif args.command == "recommend-ui":

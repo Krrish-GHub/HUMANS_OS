@@ -42,6 +42,7 @@ class AgentTests(unittest.TestCase):
         agent.CONFIG_FILE = agent.CONFIG_DIR / "config.json"
         agent.CONTEXT_FILE = agent.CONFIG_DIR / "context.txt"
         agent.RECOMMENDATION_PREFERENCES_FILE = agent.CONFIG_DIR / "recommendation-preferences.json"
+        agent.RECOMMENDATION_FEEDBACK_FILE = agent.CONFIG_DIR / "recommendation-feedback.json"
 
     def test_provider_config_stores_only_provider_and_model_private(self):
         agent.save_config("gemini-2.5-flash")
@@ -411,6 +412,36 @@ class AgentTests(unittest.TestCase):
                 {"title": "B", "reason": "R", "search_query": "query"},
                 {"title": "C", "reason": "R", "search_query": "query"},
             ]})}])
+
+    def test_video_feedback_is_local_private_and_updates_the_same_video(self):
+        video = {"video_id": "abcdefghijk", "title": "Linux Desktop Walkthrough", "channel": "Open Tech"}
+        saved = agent.record_recommendation_feedback(video, "like")
+        self.assertEqual(saved[0]["rating"], "like")
+        self.assertEqual(agent.RECOMMENDATION_FEEDBACK_FILE.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(agent.load_recommendation_feedback(), saved)
+        saved = agent.record_recommendation_feedback(video, "dislike")
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["rating"], "dislike")
+        self.assertNotIn("watch_history", agent.RECOMMENDATION_FEEDBACK_FILE.read_text())
+        self.assertTrue(agent.clear_recommendation_feedback())
+        self.assertFalse(agent.clear_recommendation_feedback())
+        self.assertEqual(agent.load_recommendation_feedback(), [])
+        with self.assertRaises(ValueError):
+            agent.record_recommendation_feedback({**video, "video_id": "bad"}, "like")
+
+    def test_video_feedback_ranks_liked_topics_and_demotes_disliked_topics_locally(self):
+        videos = [
+            {"video_id": "aaaaaaaaaaa", "title": "Quick Cooking Basics", "channel": "Food Lab"},
+            {"video_id": "bbbbbbbbbbb", "title": "Linux Mint Desktop Tour", "channel": "Open Tech"},
+            {"video_id": "ccccccccccc", "title": "A Quiet Forest Walk", "channel": "Slow Days"},
+        ]
+        feedback = [
+            {"title": "Linux Mint Walkthrough for Beginners", "channel": "Open Tech", "rating": "like"},
+            {"title": "Quick Cooking Basics", "channel": "Food Lab", "rating": "dislike"},
+        ]
+        ranked = agent.rank_recommendation_videos(videos, feedback)
+        self.assertEqual([video["video_id"] for video in ranked], ["bbbbbbbbbbb", "ccccccccccc", "aaaaaaaaaaa"])
+        self.assertEqual(agent.rank_recommendation_videos(videos, []), videos)
 
     def test_gemini_recommendation_request_is_json_without_action_tools(self):
         captured = {}
