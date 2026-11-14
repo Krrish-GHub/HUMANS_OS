@@ -429,6 +429,24 @@ class AgentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             agent.record_recommendation_feedback({**video, "video_id": "bad"}, "like")
 
+    def test_removing_one_video_rating_preserves_others_and_is_idempotent(self):
+        first = {"video_id": "abcdefghijk", "title": "Linux Desktop Walkthrough", "channel": "Open Tech"}
+        second = {"video_id": "lmnopqrstuv", "title": "Python Tips", "channel": "Code School"}
+        agent.record_recommendation_feedback(first, "like")
+        agent.record_recommendation_feedback(second, "dislike")
+
+        self.assertTrue(agent.remove_recommendation_feedback(first["video_id"]))
+        self.assertEqual(agent.load_recommendation_feedback(), [{
+            "video_id": second["video_id"], "title": second["title"],
+            "channel": second["channel"], "rating": "dislike",
+        }])
+        self.assertEqual(agent.RECOMMENDATION_FEEDBACK_FILE.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(agent.remove_recommendation_feedback(first["video_id"]))
+        self.assertTrue(agent.remove_recommendation_feedback(second["video_id"]))
+        self.assertFalse(agent.RECOMMENDATION_FEEDBACK_FILE.exists())
+        with self.assertRaises(ValueError):
+            agent.remove_recommendation_feedback("not-a-video-id")
+
     def test_video_feedback_ranks_liked_topics_and_demotes_disliked_topics_locally(self):
         videos = [
             {"video_id": "aaaaaaaaaaa", "title": "Quick Cooking Basics", "channel": "Food Lab"},

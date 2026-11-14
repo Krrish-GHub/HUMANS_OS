@@ -404,6 +404,24 @@ def load_recommendation_feedback():
     return cleaned
 
 
+def _store_recommendation_feedback(records):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(CONFIG_DIR, 0o700)
+    fd, temp_name = tempfile.mkstemp(prefix="recommendation-feedback.", dir=CONFIG_DIR)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump({"videos": records}, stream, ensure_ascii=False, sort_keys=True)
+            stream.write("\n")
+        os.replace(temp_name, RECOMMENDATION_FEEDBACK_FILE)
+        os.chmod(RECOMMENDATION_FEEDBACK_FILE, 0o600)
+    finally:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+
+
 def record_recommendation_feedback(video, rating):
     if not isinstance(video, dict) or not isinstance(rating, str) or rating not in {"like", "dislike"}:
         raise ValueError("Choose like or not for me on a listed video.")
@@ -421,21 +439,7 @@ def record_recommendation_feedback(video, rating):
     records = [item for item in records if item["video_id"] != video_id]
     records.append(record)
     records = records[-100:]
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(CONFIG_DIR, 0o700)
-    fd, temp_name = tempfile.mkstemp(prefix="recommendation-feedback.", dir=CONFIG_DIR)
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({"videos": records}, stream, ensure_ascii=False, sort_keys=True)
-            stream.write("\n")
-        os.replace(temp_name, RECOMMENDATION_FEEDBACK_FILE)
-        os.chmod(RECOMMENDATION_FEEDBACK_FILE, 0o600)
-    finally:
-        try:
-            os.unlink(temp_name)
-        except FileNotFoundError:
-            pass
+    _store_recommendation_feedback(records)
     return records
 
 
@@ -444,6 +448,20 @@ def clear_recommendation_feedback():
         RECOMMENDATION_FEEDBACK_FILE.unlink()
     except FileNotFoundError:
         return False
+    return True
+
+
+def remove_recommendation_feedback(video_id):
+    if not isinstance(video_id, str) or not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id):
+        raise ValueError("Choose a listed video to remove its rating.")
+    records = load_recommendation_feedback()
+    remaining = [item for item in records if item["video_id"] != video_id]
+    if len(remaining) == len(records):
+        return False
+    if remaining:
+        _store_recommendation_feedback(remaining)
+    else:
+        clear_recommendation_feedback()
     return True
 
 
@@ -828,10 +846,24 @@ def build_recommendation_window():
             actions.pack_start(open_button, False, False, 0)
             like_button = Gtk.Button(label="👍 Like")
             dislike_button = Gtk.Button(label="👎 Not for me")
-            like_button.connect("clicked", lambda _button, item=video: save_feedback(item, "like"))
-            dislike_button.connect("clicked", lambda _button, item=video: save_feedback(item, "dislike"))
+            saved_rating = next((item["rating"] for item in state["feedback"]
+                                 if item["video_id"] == video["video_id"]), None)
+            rating_name = {"like": "liked", "dislike": "not for me"}.get(saved_rating)
+            rating_label = Gtk.Label(label=(f"Saved locally: {rating_name}" if rating_name else ""))
+            rating_label.set_xalign(0)
+            card.pack_start(rating_label, False, False, 0)
+            clear_rating_button = Gtk.Button(label="Clear rating")
+            clear_rating_button.set_no_show_all(True)
+            clear_rating_button.set_visible(saved_rating is not None)
+            like_button.connect("clicked", lambda _button, item=video, label=rating_label,
+                                clear=clear_rating_button: save_feedback(item, "like", label, clear))
+            dislike_button.connect("clicked", lambda _button, item=video, label=rating_label,
+                                   clear=clear_rating_button: save_feedback(item, "dislike", label, clear))
+            clear_rating_button.connect("clicked", lambda _button, item=video, label=rating_label,
+                                        clear=clear_rating_button: remove_feedback(item, label, clear))
             actions.pack_start(like_button, False, False, 0)
             actions.pack_start(dislike_button, False, False, 0)
+            actions.pack_start(clear_rating_button, False, False, 0)
             card.pack_start(actions, False, False, 0)
             results_box.pack_start(card, False, False, 0)
         surprise_button.set_sensitive(True)
@@ -850,14 +882,32 @@ def build_recommendation_window():
             return
         status.set_text("Opened the selected video in your browser.")
 
-    def save_feedback(video, rating):
+    def save_feedback(video, rating, rating_label, clear_button):
         try:
             state["feedback"] = record_recommendation_feedback(video, rating)
         except (OSError, RuntimeError, ValueError) as exc:
             status.set_text(f"Could not save feedback locally: {exc}")
             return
+        rating_name = "liked" if rating == "like" else "not for me"
+        rating_label.set_text(f"Saved locally: {rating_name}")
+        clear_button.show()
         label = "Liked" if rating == "like" else "Noted; I'll avoid similar picks"
         status.set_text(f"{label}. Saved on this device only; it isn't sent to Gemini.")
+
+    def remove_feedback(video, rating_label, clear_button):
+        try:
+            removed = remove_recommendation_feedback(video.get("video_id"))
+            state["feedback"] = load_recommendation_feedback()
+        except (OSError, RuntimeError, ValueError) as exc:
+            status.set_text(f"Could not update local feedback: {exc}")
+            return
+        rating = next((item["rating"] for item in state["feedback"]
+                       if item["video_id"] == video["video_id"]), None)
+        rating_name = {"like": "liked", "dislike": "not for me"}.get(rating)
+        rating_label.set_text(f"Saved locally: {rating_name}" if rating_name else "")
+        clear_button.set_visible(rating is not None)
+        status.set_text("Saved rating removed from this device." if removed
+                         else "No saved rating for this video.")
 
     def on_surprise(_button):
         if state["videos"]:
