@@ -180,6 +180,35 @@ class AgentTests(unittest.TestCase):
         result = agent.list_applications(search_roots=[user, system])
         self.assertEqual(result["applications"], [{"id": "org.example.Editor.desktop", "name": "My Editor"}])
 
+    @mock.patch.object(agent, "shutil_which", side_effect=lambda name: "/usr/bin/" + name if name == "available-helper" else None)
+    def test_application_catalog_skips_entries_with_missing_tryexec(self, _):
+        apps = self.root / "apps"
+        apps.mkdir()
+        (apps / "missing.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=Missing Helper\nTryExec=missing-helper\n",
+            encoding="utf-8")
+        (apps / "available.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=Available Helper\nTryExec=available-helper\n",
+            encoding="utf-8")
+        executable = self.root / "helper"
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+        (apps / "path-available.desktop").write_text(
+            f"[Desktop Entry]\nType=Application\nName=Path Helper\nTryExec={executable}\n",
+            encoding="utf-8")
+        (apps / "path-missing.desktop").write_text(
+            f"[Desktop Entry]\nType=Application\nName=Missing Path\nTryExec={self.root / 'missing-helper'}\n",
+            encoding="utf-8")
+        (apps / "directory.desktop").write_text(
+            f"[Desktop Entry]\nType=Application\nName=Not Executable\nTryExec={self.root}\n",
+            encoding="utf-8")
+        (apps / "plain.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=No TryExec\n",
+            encoding="utf-8")
+        result = agent.list_applications(search_roots=[apps])
+        self.assertEqual([item["id"] for item in result["applications"]],
+                         ["available.desktop", "path-available.desktop", "plain.desktop"])
+
     @mock.patch.object(agent, "shutil_which", return_value="/usr/bin/gtk-launch")
     def test_application_launch_requires_exact_confirmation_and_uses_fixed_launcher(self, _):
         apps = self.root / "apps"

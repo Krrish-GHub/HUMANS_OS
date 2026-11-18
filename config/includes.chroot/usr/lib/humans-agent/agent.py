@@ -235,6 +235,13 @@ def _desktop_entry_name(path):
         fields[key.strip()] = value.strip()
     if fields.get("Type") != "Application":
         return None
+    try_exec = fields.get("TryExec", "").strip()
+    if try_exec:
+        if os.sep in try_exec or (os.altsep and os.altsep in try_exec):
+            if not os.path.isfile(try_exec) or not os.access(try_exec, os.X_OK):
+                return None
+        elif not shutil_which(try_exec):
+            return None
     if fields.get("Hidden", "false").lower() == "true" or fields.get("NoDisplay", "false").lower() == "true":
         return None
     name = fields.get("Name", path.name)
