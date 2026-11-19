@@ -63,14 +63,19 @@ def run_auth(binary, conf, service, username, token, expected):
         raise AssertionError(f"PAM token {token!r}: expected exit {expected}, got {result.returncode}; stdout={result.stdout!r} stderr={result.stderr!r}")
 
 
-def pam_exec_line(profile_text, args):
+def pam_profile_lines(profile_text, args):
     lines = profile_text.splitlines()
     auth_index = lines.index("Auth:")
-    row = " ".join(next(line.strip() for line in lines[auth_index + 1:] if line.strip()).split())
-    expected = "sufficient pam_exec.so expose_authtok quiet /usr/lib/corpse-os/corpse-pin-auth"
-    if row != expected:
-        raise AssertionError(f"Unexpected PAM profile auth entry: {row!r}")
-    return f"auth sufficient {MODULE} expose_authtok quiet {args[2]}"
+    rows = [" ".join(line.strip().split()) for line in lines[auth_index + 1:] if line.strip()]
+    expected = [
+        "sufficient pam_unix.so nullok try_first_pass",
+        "sufficient pam_exec.so expose_authtok quiet /usr/lib/corpse-os/corpse-pin-auth",
+    ]
+    if rows != expected:
+        raise AssertionError(f"Unexpected PAM profile auth entries: {rows!r}")
+    unix_line = "auth sufficient pam_unix.so nullok try_first_pass"
+    pin_line = f"auth sufficient {MODULE} expose_authtok quiet {args[2]}"
+    return unix_line, pin_line
 
 
 def main():
@@ -108,7 +113,7 @@ def main():
         subprocess.run(compile_args, check=True, timeout=30)
         os.chown(launcher, 0, 0)
         os.chmod(launcher, 0o4755)
-        pin_line = pam_exec_line(PROFILE.read_text(), (pin_dir, state_dir, launcher))
+        unix_profile_line, pin_line = pam_profile_lines(PROFILE.read_text(), (pin_dir, state_dir, launcher))
         common_auth = "\n".join([
             pin_line,
             f"auth required {MODULE} expose_authtok quiet /usr/bin/python3 {fallback}",
@@ -130,7 +135,19 @@ def main():
             "",
         ])
         (conf / "xfce4-screensaver").write_text(xfce_auth)
-        for name in ("corpse-pin-test", "xfce4-screensaver"):
+
+        # Match Debian's generated common-auth ordering used by LightDM: the
+        # package profile runs before the stock Unix-auth/deny/permit entries.
+        lightdm_auth = "\n".join([
+            unix_profile_line,
+            pin_line,
+            "auth [success=1 default=ignore] pam_unix.so nullok try_first_pass",
+            "auth requisite pam_deny.so",
+            "auth required pam_permit.so",
+            "",
+        ])
+        (conf / "lightdm").write_text(lightdm_auth)
+        for name in ("corpse-pin-test", "xfce4-screensaver", "lightdm"):
             os.chmod(conf / name, 0o644)
 
         source, binary = root / "harness.c", root / "pam-harness"
@@ -153,6 +170,10 @@ def main():
                            check=True, stdout=subprocess.DEVNULL)
             test_uid = pwd.getpwnam(test_user).pw_uid
             corpse_pin.enroll_pin(pin_dir, test_uid, "0427")
+            run_auth(binary, conf, "lightdm", test_user, "0427", 0)
+            run_auth(binary, conf, "lightdm", test_user, test_password, 0)
+            run_auth(binary, conf, "lightdm", test_user, "0428", 1)
+            run_auth(binary, conf, "lightdm", test_user, "wrong-password", 1)
             run_auth(binary, conf, "xfce4-screensaver", test_user, "0427", 0)
             run_auth(binary, conf, "xfce4-screensaver", test_user, test_password, 0)
             run_auth(binary, conf, "xfce4-screensaver", test_user, "0428", 1)
@@ -163,7 +184,7 @@ def main():
         finally:
             subprocess.run(["userdel", test_user], check=False, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL)
-    print("Isolated PAM integration passed: enrolled PIN and account password authenticate through the Xfce lock stack; wrong/locked PINs fail, and password recovery remains available. Temporary account, service files, and credentials removed.")
+    print("Isolated PAM integration passed: PIN and account password authenticate through the generated LightDM stack and Xfce lock stack; wrong/locked PINs fail, and password recovery remains available. Temporary account, service files, and credentials removed.")
 
 if __name__ == "__main__":
     main()

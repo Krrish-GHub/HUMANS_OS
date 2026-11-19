@@ -3,4 +3,5 @@ Default: no
 Priority: 512
 Auth-Type: Primary
 Auth:
+	sufficient	pam_unix.so nullok try_first_pass
 	sufficient	pam_exec.so expose_authtok quiet /usr/lib/corpse-os/corpse-pin-auth
